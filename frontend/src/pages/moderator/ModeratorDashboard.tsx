@@ -31,7 +31,7 @@ const SCAN_TRANSLATIONS: Record<string, TranslationKey> = {
   pending: "scanPending", clean: "scanClean", malicious: "scanMalicious", error: "scanError",
 };
 
-export function ModeratorDashboard() {
+export function ModeratorDashboard({ showAdminOverview = true }: { showAdminOverview?: boolean }) {
   const { roles } = useAuth();
   const { t, language } = useLanguage();
   const isAdmin = roles.includes("platform_admin");
@@ -223,7 +223,7 @@ export function ModeratorDashboard() {
 
   return (
     <section className="stack-lg">
-      {isAdmin && (
+      {isAdmin && showAdminOverview && (
         <section id="admin-overview" className="stack-md scroll-mt-6" aria-labelledby="admin-overview-title">
           <div><p className="eyebrow">{t("administratorOverview")}</p><h2 id="admin-overview-title" className="m-0">{t("platformQueues")}</h2><p className="muted mt-2">{t("adminOverviewIntro")}</p></div>
           <div className="grid gap-3 sm:grid-cols-3">

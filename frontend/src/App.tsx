@@ -16,6 +16,7 @@ import { AnalystApplicationPage } from "./pages/analyst/AnalystApplicationPage";
 import { ResearcherPortal } from "./pages/analyst/ResearcherPortal";
 import { ReportScamPage } from "./pages/citizen/ReportScamPage";
 import { TrackReportPage } from "./pages/citizen/TrackReportPage";
+import { AdminPortal } from "./pages/admin/AdminPortal";
 
 function NotFound() {
   return <main className="page-shell"><h1>Page not found</h1><Link to="/">Return home</Link></main>;
@@ -44,7 +45,7 @@ function AppShell() {
           <Route path="/citizen/report" element={<CitizenLayout><ReportScamPage /></CitizenLayout>} />
           <Route path="/citizen/track" element={<CitizenLayout><TrackReportPage /></CitizenLayout>} />
           <Route path="/moderator" element={<RoleGate roles={["moderator", "senior_reviewer", "platform_admin"]}><ModeratorLayout><ModeratorDashboard /></ModeratorLayout></RoleGate>} />
-          <Route path="/admin" element={<RoleGate roles={["platform_admin"]}><AdminLayout><ModeratorDashboard /></AdminLayout></RoleGate>} />
+          <Route path="/admin" element={<RoleGate roles={["platform_admin"]}><AdminLayout><AdminPortal /></AdminLayout></RoleGate>} />
           <Route path="/hacker" element={<RoleGate roles={["analyst", "mentor", "senior_reviewer"]}><HackerLayout><HackerWorkspace /></HackerLayout></RoleGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes><Footer /></div>
