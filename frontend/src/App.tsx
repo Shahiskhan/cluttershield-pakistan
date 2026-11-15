@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { Footer } from "./components/Footer";
 import { Navbar } from "./components/Navbar";
 import { AuthProvider } from "./context/AuthContext";
+import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 import { RoleGate } from "./context/RoleGate";
 import { CitizenLayout } from "./layouts/CitizenLayout";
 import { HackerLayout } from "./layouts/HackerLayout";
@@ -23,8 +24,19 @@ function NotFound() {
 export default function App() {
   return (
     <BrowserRouter>
+      <LanguageProvider>
       <AuthProvider>
-        <div className="app-frame"><Navbar /><Routes>
+        <AppShell />
+      </AuthProvider>
+      </LanguageProvider>
+    </BrowserRouter>
+  );
+}
+
+function AppShell() {
+  const { language, direction } = useLanguage();
+  return (
+    <div className="app-frame" lang={language} dir={direction}><Navbar /><Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/analyst/apply" element={<RoleGate roles={["citizen"]}><CitizenLayout><AnalystApplicationPage /></CitizenLayout></RoleGate>} />
@@ -36,7 +48,5 @@ export default function App() {
           <Route path="/hacker" element={<RoleGate roles={["analyst", "mentor", "senior_reviewer"]}><HackerLayout><HackerWorkspace /></HackerLayout></RoleGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes><Footer /></div>
-      </AuthProvider>
-    </BrowserRouter>
   );
 }

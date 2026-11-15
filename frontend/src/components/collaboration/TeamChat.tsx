@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { TeamMessage, TeamRoom } from "../../types";
+import { useLanguage } from "../../context/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
 import { getTeamRooms, postTeamMessage } from "../../services/teamService";
 import { supabase } from "../../services/supabase";
 
@@ -10,8 +12,12 @@ const ROLE_STYLES: Record<TeamMessage["sender_role"], string> = {
   Mentor: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
   Admin: "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100",
 };
+const ROLE_TRANSLATIONS: Record<TeamMessage["sender_role"], TranslationKey> = {
+  Moderator: "roleModerator", Analyst: "roleAnalyst", Mentor: "roleMentor", Admin: "roleAdmin",
+};
 
 export function TeamChat() {
+  const { t, language } = useLanguage();
   const [rooms, setRooms] = useState<TeamRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [messages, setMessages] = useState<TeamMessage[]>([]);
@@ -37,13 +43,13 @@ export function TeamChat() {
           : nextRooms[0]?.id ?? "");
       })
       .catch(() => {
-        if (active) setError("Team channels could not be loaded. Check your active workspace role.");
+        if (active) setError(t("teamLoadError"));
       })
       .finally(() => {
         if (active) setLoadingRooms(false);
       });
     return () => { active = false; };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!selectedRoomId) {
@@ -68,7 +74,7 @@ export function TeamChat() {
       })
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR" && active) {
-          setError("Live updates are temporarily unavailable. You can still reload this channel.");
+          setError(t("liveUnavailable"));
         }
       });
 
@@ -81,7 +87,7 @@ export function TeamChat() {
       .then(({ data, error: queryError }) => {
         if (!active) return;
         if (queryError) {
-          setError("Messages are unavailable for this channel.");
+          setError(t("channelMessagesUnavailable"));
           setLoadingMessages(false);
           return;
         }
@@ -90,7 +96,7 @@ export function TeamChat() {
         if (active) setLoadingMessages(false);
       }, () => {
         if (!active) return;
-        setError("Messages are unavailable for this channel.");
+        setError(t("channelMessagesUnavailable"));
         setLoadingMessages(false);
       });
 
@@ -98,7 +104,7 @@ export function TeamChat() {
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, [selectedRoomId]);
+  }, [selectedRoomId, t]);
 
   const send = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -113,12 +119,12 @@ export function TeamChat() {
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
       setError(code === "invalid_message"
-        ? "Messages cannot contain citizen contact details or report references. Share only safe, role-relevant work notes."
+        ? t("invalidMessage")
         : code === "team_scope_required"
-          ? "Your active assignment or team access has expired."
+          ? t("teamScopeError")
           : code === "rate_limited"
-            ? "You have sent several messages recently. Wait a moment and try again."
-            : "Your message could not be sent.");
+            ? t("chatRateLimited")
+            : t("sendMessageError"));
     } finally {
       setSending(false);
     }
@@ -127,17 +133,17 @@ export function TeamChat() {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-        <p className="eyebrow">Realtime collaboration</p>
-        <h2 className="m-0 text-xl font-bold text-slate-900 dark:text-slate-100">Team channels</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Messages are role-scoped. Keep citizen identities, contact details, report references, and raw evidence out of chat.</p>
+        <p className="eyebrow">{t("liveUpdates")}</p>
+        <h2 className="m-0 text-xl font-bold text-slate-900 dark:text-slate-100">{t("chatTitle")}</h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t("chatSafety")}</p>
       </div>
       {loadingRooms ? (
-        <p className="p-5 text-sm text-slate-600 dark:text-slate-300">Loading your channels…</p>
+        <p className="p-5 text-sm text-slate-600 dark:text-slate-300">{t("loadingChannels")}</p>
       ) : rooms.length === 0 ? (
-        <div className="p-5 text-sm text-slate-600 dark:text-slate-300">No team channels are assigned to this account.</div>
+        <div className="p-5 text-sm text-slate-600 dark:text-slate-300">{t("noChannels")}</div>
       ) : (
         <div className="grid min-h-[420px] md:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3 md:flex-col md:border-b-0 md:border-r dark:border-slate-700" aria-label="Team channels">
+          <nav className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3 md:flex-col md:border-b-0 md:border-r dark:border-slate-700" aria-label={t("teamChannels")}>
             {rooms.map((room) => (
               <button
                 key={room.id}
@@ -155,19 +161,19 @@ export function TeamChat() {
           </nav>
           <div className="flex min-h-[420px] min-w-0 flex-col">
             <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-              <h3 className="m-0 text-sm font-bold text-slate-800 dark:text-slate-100">{selectedRoom?.name ?? "Channel"}</h3>
+              <h3 className="m-0 text-sm font-bold text-slate-800 dark:text-slate-100">{selectedRoom?.name ?? t("channelFallback")}</h3>
               <p className="m-0 mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {selectedRoom?.room_type === "case" ? "Active case team" : "Restricted staff channel"} · Live updates
+                {selectedRoom?.room_type === "case" ? t("caseRoom") : t("staffChannel")} · {t("liveUpdates")}
               </p>
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite" aria-busy={loadingMessages}>
-              {loadingMessages && <p className="text-sm text-slate-500 dark:text-slate-400">Loading messages…</p>}
-              {!loadingMessages && messages.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No messages yet. Start with a scoped, non-sensitive update.</p>}
+              {loadingMessages && <p className="text-sm text-slate-500 dark:text-slate-400">{t("loadingMessages")}</p>}
+              {!loadingMessages && messages.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">{t("noMessages")}</p>}
               {messages.map((message) => (
                 <article key={message.id} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className={"rounded-full px-2 py-0.5 text-xs font-bold " + ROLE_STYLES[message.sender_role]}>{message.sender_role}</span>
-                    <time className="text-xs text-slate-500 dark:text-slate-400" dateTime={message.created_at}>{formatTime(message.created_at)}</time>
+                    <span className={"rounded-full px-2 py-0.5 text-xs font-bold " + ROLE_STYLES[message.sender_role]}>{t(ROLE_TRANSLATIONS[message.sender_role])}</span>
+                    <time className="text-xs text-slate-500 dark:text-slate-400" dateTime={message.created_at}>{formatTime(message.created_at, language)}</time>
                   </div>
                   <p className="m-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-800 dark:text-slate-100">{message.body}</p>
                 </article>
@@ -175,7 +181,7 @@ export function TeamChat() {
             </div>
             {error && <p className="mx-4 mb-0 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950 dark:text-rose-200" role="alert">{error}</p>}
             <form className="border-t border-slate-200 p-3 dark:border-slate-700" onSubmit={send}>
-              <label className="sr-only" htmlFor="team-message">Write a team message</label>
+              <label className="sr-only" htmlFor="team-message">{t("writeMessage")}</label>
               <div className="flex items-end gap-2">
                 <textarea
                   id="team-message"
@@ -183,14 +189,14 @@ export function TeamChat() {
                   maxLength={2000}
                   rows={2}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Share a scoped update…"
+                  placeholder={t("messagePlaceholder")}
                   className="min-h-12 flex-1 resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                 />
                 <button className="button button-primary" type="submit" disabled={!draft.trim() || sending}>
-                  {sending ? "Sending…" : "Send"}
+                  {sending ? t("sendingMessage") : t("sendMessage")}
                 </button>
               </div>
-              <p className="mb-0 mt-2 text-xs text-slate-500 dark:text-slate-400">{draft.length}/2000 · Messages are stored with role labels; sender account IDs are not included in message rows.</p>
+              <p className="mb-0 mt-2 text-xs text-slate-500 dark:text-slate-400">{draft.length}/2000 · {t("channelCharacterCount")}</p>
             </form>
           </div>
         </div>
@@ -209,7 +215,7 @@ function mergeMessages(first: TeamMessage[], second: TeamMessage[]): TeamMessage
   return [...first, ...second].reduce<TeamMessage[]>((result, item) => mergeMessage(result, item), []);
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, language: "en" | "ur"): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "time unavailable" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString(language === "ur" ? "ur-PK" : "en-PK");
 }

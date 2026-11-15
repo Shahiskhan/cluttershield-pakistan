@@ -2,9 +2,12 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
+import type { TranslationKey } from "../i18n/translations";
 
 export function AuthPage() {
   const { user, roles, loading, signInWithPassword, signUpWithPassword, configured } = useAuth();
+  const { t } = useLanguage();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const requestedDestination = (location.state as { from?: string } | null)?.from ?? searchParams.get("next");
@@ -29,28 +32,28 @@ export function AuthPage() {
         await signInWithPassword(email, password);
       }
     } catch (cause) {
-      setError(authMessage(cause));
+      setError(authMessage(cause, t));
     }
   };
-  if (user && loading) return <main className="narrow-shell page-shell"><p className="muted">Loading your secure workspace…</p></main>;
+  if (user && loading) return <main className="narrow-shell page-shell"><p className="muted">{t("authLoading")}</p></main>;
   if (user) return <Navigate to={destination} replace />;
   return (
     <main className="narrow-shell page-shell">
-      <p className="eyebrow">Secure access</p><h1>{mode === "signin" ? "Sign in" : "Create your account"}</h1>
-      <p className="muted">Citizen accounts can submit reports and apply to join the research team. Elevated roles are granted only after staff review.</p>
-      {!configured && <p className="notice notice-caution">Add the local Supabase URL and publishable key in <code>.env.local</code> to enable sign-in.</p>}
+      <p className="eyebrow">{t("brand")}</p><h1>{mode === "signin" ? t("signIn") : t("createAccount")}</h1>
+      <p className="muted">{t("authIntro")}</p>
+      {!configured && <p className="notice notice-caution">{t("authConfig")}</p>}
       {sent ? <div className="notice notice-success" role="status">
-        <p>Account created. Check your email for the confirmation link, then sign in here. Your account will have citizen access until an administrator approves any researcher application.</p>
-        <button className="link-button" type="button" onClick={() => { setSent(false); setMode("signin"); }}>Back to sign in</button>
+        <p>{t("accountCreated")}</p>
+        <button className="link-button" type="button" onClick={() => { setSent(false); setMode("signin"); }}>{t("backToSignIn")}</button>
       </div> : (
         <form className="form-card" onSubmit={submit}>
-          <label>Email address<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-          <label>Password<input required type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={mode === "signup" ? 12 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-          {mode === "signup" && <p className="fine-print">Use at least 12 characters. Signup creates a citizen account; it does not grant moderator or analyst access.</p>}
+          <label>{t("emailAddress")}<input required type="email" dir="ltr" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+          <label>{t("password")}<input required type="password" dir="ltr" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={mode === "signup" ? 12 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+          {mode === "signup" && <p className="fine-print">{t("passwordHint")}</p>}
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="button button-primary" type="submit" disabled={!configured}>{mode === "signin" ? "Sign in" : "Create account"}</button>
+          <button className="button button-primary" type="submit" disabled={!configured}>{mode === "signin" ? t("signIn") : t("createAccount")}</button>
           <button className="link-button mt-3" type="button" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setSent(false); }}>
-            {mode === "signin" ? "New here? Create a citizen account" : "Already registered? Sign in"}
+            {mode === "signin" ? t("newAccountPrompt") : t("existingAccountPrompt")}
           </button>
         </form>
       )}
@@ -68,13 +71,13 @@ function isAllowedDestination(path: string | null | undefined, roles: string[]):
   return path === "/";
 }
 
-function authMessage(cause: unknown): string {
+function authMessage(cause: unknown, t: (key: TranslationKey) => string): string {
   const message = cause instanceof Error ? cause.message.toLowerCase() : "";
-  if (message.includes("invalid login credentials")) return "Email or password is incorrect. If you just registered, confirm your email first.";
-  if (message.includes("email not confirmed")) return "Confirm your email from the message Supabase sent, then sign in.";
-  if (message.includes("user already registered")) return "An account already uses this email. Switch to sign in.";
-  if (message.includes("password should be at least")) return "Choose a longer password and try again.";
-  if (message.includes("rate limit")) return "Too many attempts. Wait a few minutes and try again.";
-  if (message.includes("failed to fetch") || message.includes("network")) return "Could not reach Supabase. Check your connection and project configuration.";
-  return "Authentication could not be completed. Check the form and your Supabase Auth email/password settings.";
+  if (message.includes("invalid login credentials")) return t("authInvalid");
+  if (message.includes("email not confirmed")) return t("authEmailUnconfirmed");
+  if (message.includes("user already registered")) return t("authAlreadyRegistered");
+  if (message.includes("password should be at least")) return t("authWeakPassword");
+  if (message.includes("rate limit")) return t("authRateLimit");
+  if (message.includes("failed to fetch") || message.includes("network")) return t("authNetwork");
+  return t("authGenericError");
 }

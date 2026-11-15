@@ -3,6 +3,8 @@ import type { FormEvent } from "react";
 import { TeamChat } from "../../components/collaboration/TeamChat";
 import { StatusPill } from "../../components/StatusPill";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
 import { AnalystApplicationsPanel } from "./AnalystApplicationsPanel";
 import {
   createOsintCase,
@@ -16,8 +18,22 @@ import {
 } from "../../services/moderationService";
 import type { ModerationItem, ReportStatus } from "../../types";
 
+const CATEGORY_TRANSLATIONS: Record<string, TranslationKey> = {
+  phishing_url: "phishingUrl", impersonation: "govtImpersonation", payment_fraud: "walletFraud",
+  delivery_fraud: "courierScam", investment_job_scam: "investmentJobScam", account_takeover: "accountTakeover",
+  marketplace_fraud: "marketplaceFraud", other: "other",
+};
+const CHANNEL_TRANSLATIONS: Record<string, TranslationKey> = {
+  sms: "sms", whatsapp: "whatsapp", phone_call: "phoneCall", website: "statusWebsite",
+  website_social_media: "websiteSocial", social_media: "statusSocialMedia", email: "statusEmail",
+};
+const SCAN_TRANSLATIONS: Record<string, TranslationKey> = {
+  pending: "scanPending", clean: "scanClean", malicious: "scanMalicious", error: "scanError",
+};
+
 export function ModeratorDashboard() {
   const { roles } = useAuth();
+  const { t, language } = useLanguage();
   const isAdmin = roles.includes("platform_admin");
   const canModerate = roles.includes("moderator") || isAdmin;
   const canPublish = roles.includes("senior_reviewer") || roles.includes("platform_admin");
@@ -58,7 +74,7 @@ export function ModeratorDashboard() {
     try {
       setReports(await getModerationQueue());
     } catch {
-      setError(isAdmin ? "The administrator report queue is unavailable. Check the latest database migration and Edge Function deployment." : "The assigned moderation queue is unavailable. Check your active assignment and function deployment.");
+      setError(isAdmin ? t("adminQueueUnavailable") : t("assignedQueueUnavailable"));
     } finally {
       setLoadingReports(false);
     }
@@ -70,7 +86,7 @@ export function ModeratorDashboard() {
     try {
       setPublicationItems(await getIndicatorPublicationQueue());
     } catch {
-      setError("The independent publication review queue is unavailable.");
+      setError(t("publicationQueueUnavailable"));
     } finally {
       setLoadingPublication(false);
     }
@@ -88,13 +104,13 @@ export function ModeratorDashboard() {
     setNotice("");
     try {
       await updateReportStatus(item.id, status, reason, note);
-      setNotice(item.report_ref + " was updated.");
+      setNotice(t("reportUpdated") + " " + item.report_ref);
       await loadReports();
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
       setError(code === "scope_required"
-        ? "This report is outside your current assignment."
-        : "The status change could not be saved. The report may have changed since the queue loaded.");
+        ? t("reportOutsideAssignment")
+        : t("statusSaveFailed"));
     } finally {
       setWorkingId(null);
     }
@@ -109,8 +125,8 @@ export function ModeratorDashboard() {
     try {
       const result = await verifyReportIndicator(item.id, verificationUrl.trim(), verificationNote.trim());
       setNotice(result.publication_state === "already_published"
-        ? item.report_ref + " was accepted; its related indicator is already published."
-        : item.report_ref + " was verified and sent for an independent second review. It is not public until that review approves it.");
+        ? t("alreadyPublished")
+        : t("secondReviewQueued"));
       setVerificationId(null);
       setVerificationUrl("");
       setVerificationNote("");
@@ -119,8 +135,8 @@ export function ModeratorDashboard() {
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
       setError(code === "scope_required"
-        ? "This report is outside your active assignment."
-        : "Verification could not be recorded. Check the public source and the report status.");
+        ? t("reportOutsideAssignment")
+        : t("verifyFailed"));
     } finally {
       setWorkingId(null);
     }
@@ -130,7 +146,7 @@ export function ModeratorDashboard() {
     event.preventDefault();
     const sources = caseSources.split(/[\n,]+/).map((source) => source.trim().toLowerCase()).filter(Boolean);
     if (!sources.length) {
-      setError("Add at least one allowed public source domain.");
+      setError(t("addAllowedSource"));
       return;
     }
     setWorkingId(item.id);
@@ -138,7 +154,7 @@ export function ModeratorDashboard() {
     setNotice("");
     try {
       const result = await createOsintCase({ reportId: item.id, title: caseTitle, brief: caseBrief, objective: caseObjective, allowedSources: sources });
-      setNotice(`Sanitized research case ${result.case_ref} is available to approved analysts.`);
+      setNotice(`${t("caseAvailable")} ${result.case_ref}`);
       setCaseFormId(null);
       setCaseTitle("");
       setCaseBrief("");
@@ -148,8 +164,8 @@ export function ModeratorDashboard() {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(message.includes("invalid_case")
-        ? "The case was not accepted. Check that source entries are public domain names and the brief does not include contact details or the report reference."
-        : "The OSINT case could not be created. It may already exist or the report may no longer be eligible.");
+        ? t("invalidCase")
+        : t("caseCreateFailed"));
     } finally {
       setWorkingId(null);
     }
@@ -166,9 +182,7 @@ export function ModeratorDashboard() {
       const code = cause instanceof Error ? cause.message : "";
       setPreviewErrors((current) => ({
         ...current,
-        [key]: code === "evidence_pending_scan"
-          ? "Preview is unavailable until the file passes scanning and quarantine release."
-          : "A secure evidence preview could not be created.",
+        [key]: code === "evidence_pending_scan" ? t("previewAwaitScan") : t("previewFailed"),
       }));
     } finally {
       setPreviewBusy(null);
@@ -179,10 +193,10 @@ export function ModeratorDashboard() {
     const note = reviewNotes[item.indicator_id]?.trim() ?? "";
     const source = reviewUrls[item.indicator_id]?.trim() ?? "";
     if (note.length < 10 || !source) {
-      setError("Enter an independent public source and a review note before recording this decision.");
+      setError(t("independentSourceRequired"));
       return;
     }
-    if (decision === "rejected" && !window.confirm("Reject this indicator from publication?")) return;
+    if (decision === "rejected" && !window.confirm(t("confirmRejectWarning"))) return;
     setWorkingId(item.indicator_id);
     setError("");
     setNotice("");
@@ -195,15 +209,13 @@ export function ModeratorDashboard() {
         verificationSourceUrl: source,
         verificationNote: note,
       });
-      setNotice(result.status === "published"
-        ? "Indicator approved by an independent reviewer and marked ready for feed compilation."
-        : "Indicator was rejected from publication.");
+      setNotice(result.status === "published" ? t("warningPublished") : t("warningRejected"));
       await loadPublicationQueue();
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
       setError(code === "independent_review_required"
-        ? "The first reviewer cannot approve their own verification."
-        : "The publication decision could not be saved. It may already have been reviewed.");
+        ? t("cannotApproveOwn")
+        : t("warningDecisionFailed"));
     } finally {
       setWorkingId(null);
     }
@@ -213,16 +225,16 @@ export function ModeratorDashboard() {
     <section className="stack-lg">
       {isAdmin && (
         <section id="admin-overview" className="stack-md scroll-mt-6" aria-labelledby="admin-overview-title">
-          <div><p className="eyebrow">Administrator overview</p><h2 id="admin-overview-title" className="m-0">Platform queues</h2><p className="muted mt-2">Review citizen reports, verify researcher applications, and make independent publication decisions.</p></div>
+          <div><p className="eyebrow">{t("administratorOverview")}</p><h2 id="admin-overview-title" className="m-0">{t("platformQueues")}</h2><p className="muted mt-2">{t("adminOverviewIntro")}</p></div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <a href="#assigned-reports-title" className="review-card transition hover:border-teal-400"><p className="eyebrow">Reports in queue</p><p className="m-0 text-3xl font-bold text-slate-900">{loadingReports ? "—" : reports.length}</p><p className="fine-print">Triage and review actions</p><span className="text-sm font-semibold text-teal-800">Open report queue →</span></a>
-            <a href="#researcher-applications-title" className="review-card transition hover:border-teal-400"><p className="eyebrow">Researcher requests</p><p className="m-0 text-3xl font-bold text-slate-900">{pendingApplications === null ? "—" : pendingApplications}</p><p className="fine-print">Pending verification</p><span className="text-sm font-semibold text-teal-800">Review applications →</span></a>
-            <a href="#publication-queue-title" className="review-card transition hover:border-teal-400"><p className="eyebrow">Indicator publication</p><p className="m-0 text-3xl font-bold text-slate-900">{loadingPublication ? "—" : publicationItems.length}</p><p className="fine-print">Awaiting independent review</p><span className="text-sm font-semibold text-teal-800">Review indicators →</span></a>
+            <a href="#assigned-reports-title" className="review-card transition hover:border-teal-400"><p className="eyebrow">{t("reportsInQueue")}</p><p className="m-0 text-3xl font-bold text-slate-900">{loadingReports ? "—" : reports.length}</p><p className="fine-print">{t("triageReviewActions")}</p><span className="text-sm font-semibold text-teal-800">{t("openReportQueue")}</span></a>
+            <a href="#researcher-applications-title" className="review-card transition hover:border-teal-400"><p className="eyebrow">{t("pendingResearcherRequests")}</p><p className="m-0 text-3xl font-bold text-slate-900">{pendingApplications === null ? "—" : pendingApplications}</p><p className="fine-print">{t("pendingVerification")}</p><span className="text-sm font-semibold text-teal-800">{t("reviewApplications")}</span></a>
+            <a href="#publication-queue-title" className="review-card transition hover:border-teal-400"><p className="eyebrow">{t("pendingWarnings")}</p><p className="m-0 text-3xl font-bold text-slate-900">{loadingPublication ? "—" : publicationItems.length}</p><p className="fine-print">{t("independentReview")}</p><span className="text-sm font-semibold text-teal-800">{t("reviewWarnings")}</span></a>
           </div>
         </section>
       )}
       <div className="notice notice-caution">
-        A triage score is a routing aid, not a finding of guilt. Moderators see only assigned reports; administrators can review the full queue. Indicator publication requires source-backed verification and a separate reviewer.
+        {t("cautionTriage")}
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       {notice && <p className="notice notice-success" role="status">{notice}</p>}
@@ -230,44 +242,44 @@ export function ModeratorDashboard() {
       {canModerate && (
         <section className="stack-md" aria-labelledby="assigned-reports-title">
           <div className="section-title-row">
-            <div><p className="eyebrow">{isAdmin ? "Administrator queue" : "Assigned work"}</p><h2 id="assigned-reports-title" className="m-0">Verification triage</h2></div>
-            <button className="button button-secondary" type="button" onClick={() => void loadReports()} disabled={loadingReports}>Refresh</button>
+            <div><p className="eyebrow">{isAdmin ? t("administratorQueue") : t("assignedWork")}</p><h2 id="assigned-reports-title" className="m-0">{t("verificationQueue")}</h2></div>
+            <button className="button button-secondary" type="button" onClick={() => void loadReports()} disabled={loadingReports}>{t("refresh")}</button>
           </div>
-          {loadingReports ? <p className="muted">Loading assigned reports…</p> :
-            reports.length === 0 ? <div className="empty-state"><h3>{isAdmin ? "No reports need administrator action" : "No pending assigned reports"}</h3><p>{isAdmin ? "New citizen reports and verified cases appear here." : "Reports appear here only while your assignment is active."}</p></div> :
+          {loadingReports ? <p className="muted">{t("loadingApplications")}</p> :
+            reports.length === 0 ? <div className="empty-state"><h3>{isAdmin ? t("noAdminReports") : t("noAssignedReports")}</h3><p>{isAdmin ? t("newPublicReports") : t("assignedReportsAppear")}</p></div> :
               reports.map((item) => (
                 <article className="review-card" key={item.id}>
                   <div className="review-card-heading">
-                    <div><p className="eyebrow">{item.report_ref} · {item.category.replaceAll("_", " ")}</p><h3>{item.channel.replaceAll("_", " ")}</h3></div>
+                    <div><p className="eyebrow"><bdi dir="ltr">{item.report_ref}</bdi> · {t(CATEGORY_TRANSLATIONS[item.category] ?? "other")}</p><h3>{t(CHANNEL_TRANSLATIONS[item.channel] ?? "statusWebsite")}</h3></div>
                     <StatusPill status={item.status} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Triage score {item.risk_score}/100</span>
-                    <span className="fine-print">Rule-based queue priority only · {item.priority} operational priority</span>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{t("triageScoreLabel")} {item.risk_score}/100</span>
+                    <span className="fine-print">{t("rulePriority")} · {t(item.priority === "urgent" ? "statusUrgent" : item.priority === "high" ? "statusHigh" : "statusNormal")} {t("operationalPriority")}</span>
                   </div>
-                  <p className="review-indicator"><strong>Masked indicator:</strong> {item.indicator_masked ?? "not available"}</p>
+                  <p className="review-indicator"><strong>{t("maskedIndicator")}</strong> <bdi dir="ltr">{item.indicator_masked ?? t("unavailable")}</bdi></p>
                   <p className="narrative rounded-lg bg-slate-50 p-4 text-slate-800">{item.narrative}</p>
-                  <p className="fine-print">Submitted {new Date(item.created_at).toLocaleString()}</p>
+                  <p className="fine-print">{t("submittedAt")} {new Date(item.created_at).toLocaleString(language === "ur" ? "ur-PK" : "en-PK")}</p>
 
                   {item.evidence.length > 0 && (
-                    <section className="rounded-xl border border-slate-200 p-4" aria-label="Evidence files">
-                      <h4 className="m-0 mb-2 text-sm font-bold">Evidence</h4>
+                    <section className="rounded-xl border border-slate-200 p-4" aria-label={t("evidenceFiles")}>
+                      <h4 className="m-0 mb-2 text-sm font-bold">{t("evidenceFiles")}</h4>
                       <ul className="m-0 grid gap-2 p-0">
                         {item.evidence.map((evidence) => {
                           const key = item.id + ":" + evidence.id;
                           const signed = previews[key];
                           return (
                             <li key={evidence.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                              <span className="text-slate-700">Private attachment · {evidence.scan_state.replaceAll("_", " ")}</span>
+                              <span className="text-slate-700">{t("privateAttachment")} · {t(SCAN_TRANSLATIONS[evidence.scan_state] ?? "scanPending")}</span>
                               {evidence.can_preview && (!signed || Date.parse(signed.expiresAt) <= Date.now()) && (
                                 <button className="button button-secondary min-h-9 py-1.5" type="button" disabled={previewBusy === key} onClick={() => void preview(item, evidence.id)}>
-                                  {previewBusy === key ? "Preparing…" : "Create secure preview"}
+                                  {previewBusy === key ? t("preparingPreview") : t("secureEvidencePreview")}
                                 </button>
                               )}
                               {evidence.can_preview && signed && new Date(signed.expiresAt).getTime() > Date.now() && (
-                                <a className="font-semibold text-teal-800 underline underline-offset-2" href={signed.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">Open signed preview</a>
+                                <a className="font-semibold text-teal-800 underline underline-offset-2" href={signed.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{t("openSignedPreview")}</a>
                               )}
-                              {!evidence.can_preview && <span className="text-xs text-slate-500">Available after clean scan and quarantine release</span>}
+                              {!evidence.can_preview && <span className="text-xs text-slate-500">{t("previewAfterScan")}</span>}
                               {previewErrors[key] && <span className="w-full text-xs text-rose-700">{previewErrors[key]}</span>}
                             </li>
                           );
@@ -279,61 +291,61 @@ export function ModeratorDashboard() {
                   <div className="flex flex-wrap gap-2">
                     {(item.status === "submitted" || item.status === "needs_information") && (
                       <button className="button button-secondary" type="button" disabled={workingId === item.id} onClick={() => void moveReport(item, "triage", item.status === "submitted" ? "triage_started" : "information_received")}>
-                        {item.status === "submitted" ? "Start triage" : "Return to triage"}
+                        {item.status === "submitted" ? t("startTriage") : t("returnTriage")}
                       </button>
                     )}
                     {item.status === "triage" && (
                       <>
-                        <button className="button button-secondary" type="button" disabled={workingId === item.id} onClick={() => void moveReport(item, "under_review", "review_started")}>Begin review</button>
-                        <button className="button button-secondary" type="button" disabled={workingId === item.id || (clarificationNotes[item.id]?.trim().length ?? 0) < 10} onClick={() => void moveReport(item, "needs_information", "clarification_requested", clarificationNotes[item.id]?.trim() ?? null)}>Request clarification</button>
+                        <button className="button button-secondary" type="button" disabled={workingId === item.id} onClick={() => void moveReport(item, "under_review", "review_started")}>{t("beginReview")}</button>
+                        <button className="button button-secondary" type="button" disabled={workingId === item.id || (clarificationNotes[item.id]?.trim().length ?? 0) < 10} onClick={() => void moveReport(item, "needs_information", "clarification_requested", clarificationNotes[item.id]?.trim() ?? null)}>{t("requestClarification")}</button>
                       </>
                     )}
                     {(item.status === "submitted" || item.status === "triage" || item.status === "needs_information" || item.status === "under_review") && (
-                      <button className="button button-secondary" type="button" disabled={workingId === item.id} onClick={() => void moveReport(item, "rejected", "spam_or_false_report")}>Reject (spam / false)</button>
+                      <button className="button button-secondary" type="button" disabled={workingId === item.id} onClick={() => void moveReport(item, "rejected", "spam_or_false_report")}>{t("rejectSpam")}</button>
                     )}
                     {item.status === "under_review" && (
                       <button className="button button-primary" type="button" disabled={workingId === item.id} onClick={() => { setVerificationId(verificationId === item.id ? null : item.id); setVerificationUrl(""); setVerificationNote(""); setVerificationConfirmed(false); }}>
-                        Verify &amp; Publish Indicator
+                        {t("verifyIndicator")}
                       </button>
                     )}
                   </div>
 
                   {item.status === "triage" && (
-                    <label className="text-sm font-semibold">Clarification note for the reporter
-                      <textarea maxLength={500} rows={2} value={clarificationNotes[item.id] ?? ""} onChange={(event) => setClarificationNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Ask for one specific, non-sensitive detail." />
-                      <span className="fine-print">Do not ask for passwords, OTPs, PINs, CNIC images, or unnecessary identity details.</span>
+                    <label className="text-sm font-semibold">{t("clarificationNote")}
+                      <textarea maxLength={500} rows={2} value={clarificationNotes[item.id] ?? ""} onChange={(event) => setClarificationNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={t("clarificationPlaceholder")} />
+                      <span className="fine-print">{t("noSensitiveClarification")}</span>
                     </label>
                   )}
 
                   {verificationId === item.id && (
                     <form className="form-card mt-2 border border-teal-200 bg-teal-50/40" onSubmit={(event) => void verify(event, item)}>
-                      <h4 className="m-0">Record independent public verification</h4>
-                      <p className="fine-print">This records a source-backed first review. A different senior reviewer or administrator must approve publication; this action does not publish the indicator by itself.</p>
-                      <label>Public source URL
-                        <input type="url" required maxLength={2048} value={verificationUrl} onChange={(event) => setVerificationUrl(event.target.value)} placeholder="https://official.example.gov.pk/security-notice" />
+                      <h4 className="m-0">{t("recordPublicVerification")}</h4>
+                      <p className="fine-print">{t("secondReviewerRequired")}</p>
+                      <label>{t("firstPublicSourceUrl")}
+                        <input type="url" dir="ltr" required maxLength={2048} value={verificationUrl} onChange={(event) => setVerificationUrl(event.target.value)} placeholder="https://official.example.gov.pk/security-notice" />
                       </label>
-                      <label>Verification note
-                        <textarea required minLength={10} maxLength={1000} rows={3} value={verificationNote} onChange={(event) => setVerificationNote(event.target.value)} placeholder="Explain what public evidence corroborates the indicator. Do not include citizen identifiers." />
+                      <label>{t("verificationNote")}
+                        <textarea required minLength={10} maxLength={1000} rows={3} value={verificationNote} onChange={(event) => setVerificationNote(event.target.value)} placeholder={t("verificationNotePlaceholder")} />
                       </label>
-                      <label className="checkbox-label"><input type="checkbox" checked={verificationConfirmed} onChange={(event) => setVerificationConfirmed(event.target.checked)} required /><span>I checked a public source independent of the citizen allegation and did not include personal data.</span></label>
+                      <label className="checkbox-label"><input type="checkbox" checked={verificationConfirmed} onChange={(event) => setVerificationConfirmed(event.target.checked)} required /><span>{t("checkedIndependentSource")}</span></label>
                       <div className="flex flex-wrap gap-2">
-                        <button className="button button-primary" type="submit" disabled={workingId === item.id || !verificationConfirmed}>{workingId === item.id ? "Recording…" : "Verify & queue for publication"}</button>
-                        <button className="button button-secondary" type="button" onClick={() => setVerificationId(null)}>Cancel</button>
+                        <button className="button button-primary" type="submit" disabled={workingId === item.id || !verificationConfirmed}>{workingId === item.id ? t("recording") : t("verifyQueuePublication")}</button>
+                        <button className="button button-secondary" type="button" onClick={() => setVerificationId(null)}>{t("cancel")}</button>
                       </div>
                     </form>
                   )}
 
                   {isAdmin && item.status === "accepted" && !item.osint_case_exists && (
                     <div className="stack-sm rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
-                      <div><h4 className="m-0">Create a sanitized OSINT case</h4><p className="fine-print mt-1">Analysts receive only the fields below. Do not copy the citizen narrative, report reference, phone numbers, names, account identifiers, or private evidence.</p></div>
-                      {caseFormId !== item.id ? <button className="button button-secondary w-fit" type="button" onClick={() => { setCaseFormId(item.id); setCaseTitle(""); setCaseBrief(""); setCaseObjective(""); setCaseSources(""); }}>Prepare research task</button> : (
+                      <div><h4 className="m-0">{t("createOsintCase")}</h4><p className="fine-print mt-1">{t("researcherSafetyLong")}</p></div>
+                      {caseFormId !== item.id ? <button className="button button-secondary w-fit" type="button" onClick={() => { setCaseFormId(item.id); setCaseTitle(""); setCaseBrief(""); setCaseObjective(""); setCaseSources(""); }}>{t("prepareResearchTask")}</button> : (
                         <form className="form-stack" onSubmit={(event) => void publishCase(event, item)}>
-                          <label>Safe case title<input required minLength={3} maxLength={160} value={caseTitle} onChange={(event) => setCaseTitle(event.target.value)} /></label>
-                          <label>Sanitized brief<textarea required minLength={10} maxLength={5000} rows={3} value={caseBrief} onChange={(event) => setCaseBrief(event.target.value)} placeholder="Describe the public threat pattern without identifying the reporting person or private target." /></label>
-                          <label>Research objective<textarea required minLength={10} maxLength={1000} rows={2} value={caseObjective} onChange={(event) => setCaseObjective(event.target.value)} placeholder="State the bounded public-source question to investigate." /></label>
-                          <label>Allowed public source domains <span className="muted font-normal">(one domain per line)</span><textarea required rows={3} value={caseSources} onChange={(event) => setCaseSources(event.target.value)} placeholder="example.gov.pk\nexample.org" /></label>
-                          <div className="notice notice-caution">Analysts may use public sources only. Intrusion, credential access, private record collection, doxxing, and suspect contact are blocked by the case rules.</div>
-                          <div className="flex flex-wrap gap-2"><button className="button button-primary" type="submit" disabled={workingId === item.id}>{workingId === item.id ? "Creating…" : "Publish sanitized case to analyst pool"}</button><button className="button button-secondary" type="button" onClick={() => setCaseFormId(null)}>Cancel</button></div>
+                          <label>{t("caseTitle")}<input required minLength={3} maxLength={160} value={caseTitle} onChange={(event) => setCaseTitle(event.target.value)} /></label>
+                          <label>{t("safeBrief")}<textarea required minLength={10} maxLength={5000} rows={3} value={caseBrief} onChange={(event) => setCaseBrief(event.target.value)} placeholder={t("safeBriefPlaceholder")} /></label>
+                          <label>{t("researchObjective")}<textarea required minLength={10} maxLength={1000} rows={2} value={caseObjective} onChange={(event) => setCaseObjective(event.target.value)} placeholder={t("objectivePlaceholder")} /></label>
+                          <label>{t("allowedSources")} <span className="muted font-normal">({t("sourceDomainsHint")})</span><textarea dir="ltr" required rows={3} value={caseSources} onChange={(event) => setCaseSources((event.target.value))} placeholder={t("sourceDomainsPlaceholder")} /></label>
+                          <div className="notice notice-caution">{t("noPersonalResearch")}</div>
+                          <div className="flex flex-wrap gap-2"><button className="button button-primary" type="submit" disabled={workingId === item.id}>{workingId === item.id ? t("creating") : t("publishCaseToPool")}</button><button className="button button-secondary" type="button" onClick={() => setCaseFormId(null)}>{t("cancel")}</button></div>
                         </form>
                       )}
                     </div>
@@ -348,29 +360,29 @@ export function ModeratorDashboard() {
       {canPublish && (
         <section className="stack-md" aria-labelledby="publication-queue-title">
           <div className="section-title-row">
-            <div><p className="eyebrow">Senior reviewer / police reviewer</p><h2 id="publication-queue-title" className="m-0">Independent publication review</h2></div>
-            <button className="button button-secondary" type="button" onClick={() => void loadPublicationQueue()} disabled={loadingPublication}>Refresh</button>
+            <div><p className="eyebrow">{t("reviewerRole")}</p><h2 id="publication-queue-title" className="m-0">{t("publicationReview")}</h2></div>
+            <button className="button button-secondary" type="button" onClick={() => void loadPublicationQueue()} disabled={loadingPublication}>{t("refresh")}</button>
           </div>
-          <p className="muted">Approve only with an independent public source. Approval marks an indicator ready for feed compilation; signed feed releases remain a separate controlled operation.</p>
-          {loadingPublication ? <p className="muted">Loading publication queue…</p> :
-            publicationItems.length === 0 ? <div className="empty-state"><h3>No indicators await senior review</h3><p>Moderators’ source-backed verifications appear here for independent review.</p></div> :
+          <p className="muted">{t("independentReviewIntro")}</p>
+          {loadingPublication ? <p className="muted">{t("loadingApplications")}</p> :
+            publicationItems.length === 0 ? <div className="empty-state"><h3>{t("noWarningsPending")}</h3><p>{t("independentReviewIntro")}</p></div> :
               publicationItems.map((item) => (
                 <article className="review-card" key={item.indicator_id}>
-                  <div className="review-card-heading"><div><p className="eyebrow">{item.report_ref} · {item.category.replaceAll("_", " ")}</p><h3>Masked indicator: {item.indicator_masked}</h3></div><span className="status-pill status-caution">Pending independent review</span></div>
-                  <p className="text-sm text-slate-700">First reviewer source: <a href={item.verification_source_url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{item.verification_source_url}</a></p>
+                  <div className="review-card-heading"><div><p className="eyebrow"><bdi dir="ltr">{item.report_ref}</bdi> · {t(CATEGORY_TRANSLATIONS[item.category] ?? "other")}</p><h3>{t("maskedIndicatorTitle")} <bdi dir="ltr">{item.indicator_masked}</bdi></h3></div><span className="status-pill status-caution">{t("independentReview")}</span></div>
+                  <p className="text-sm text-slate-700">{t("verifiedBySource")} <a dir="ltr" href={item.verification_source_url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{item.verification_source_url}</a></p>
                   <p className="narrative rounded-lg bg-slate-50 p-4 text-slate-800">{item.verification_note}</p>
-                  <label>Your independent source URL
-                    <input type="url" required maxLength={2048} value={reviewUrls[item.indicator_id] ?? ""} onChange={(event) => setReviewUrls((current) => ({ ...current, [item.indicator_id]: event.target.value }))} placeholder="https://official.example.gov.pk/notice" />
+                  <label>{t("yourIndependentSource")}
+                    <input type="url" dir="ltr" required maxLength={2048} value={reviewUrls[item.indicator_id] ?? ""} onChange={(event) => setReviewUrls((current) => ({ ...current, [item.indicator_id]: event.target.value }))} placeholder="https://official.example.gov.pk/notice" />
                   </label>
-                  <label>Independent review note
-                    <textarea minLength={10} maxLength={1000} rows={3} value={reviewNotes[item.indicator_id] ?? ""} onChange={(event) => setReviewNotes((current) => ({ ...current, [item.indicator_id]: event.target.value }))} placeholder="State why the public source supports or contradicts publication." />
+                  <label>{t("independentReviewNote")}
+                    <textarea minLength={10} maxLength={1000} rows={3} value={reviewNotes[item.indicator_id] ?? ""} onChange={(event) => setReviewNotes((current) => ({ ...current, [item.indicator_id]: event.target.value }))} placeholder={t("reviewSupportsOrContradicts")} />
                   </label>
-                  <label>Confidence after corroboration: {confidenceById[item.indicator_id] ?? 70}%
+                  <label>{t("confidenceCorroboration")} {confidenceById[item.indicator_id] ?? 70}%
                     <input type="range" min={50} max={90} step={5} value={confidenceById[item.indicator_id] ?? 70} onChange={(event) => setConfidenceById((current) => ({ ...current, [item.indicator_id]: Number(event.target.value) }))} />
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <button className="button button-primary" type="button" disabled={workingId === item.indicator_id} onClick={() => void decidePublication(item, "approved")}>{workingId === item.indicator_id ? "Saving…" : "Approve & publish"}</button>
-                    <button className="button button-secondary" type="button" disabled={workingId === item.indicator_id} onClick={() => void decidePublication(item, "rejected")}>Reject publication</button>
+                    <button className="button button-primary" type="button" disabled={workingId === item.indicator_id} onClick={() => void decidePublication(item, "approved")}>{workingId === item.indicator_id ? t("saving") : t("approvePublish")}</button>
+                    <button className="button button-secondary" type="button" disabled={workingId === item.indicator_id} onClick={() => void decidePublication(item, "rejected")}>{t("rejectPublication")}</button>
                   </div>
                 </article>
               ))}

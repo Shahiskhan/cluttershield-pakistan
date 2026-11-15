@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { useLanguage } from "../context/LanguageContext";
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  const { t } = useLanguage();
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     dialogRef.current?.focus();
@@ -11,7 +13,7 @@ export function Modal({ title, children, onClose }: { title: string; children: R
   return (
     <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1}>
-        <div className="modal-heading"><h2 id="modal-title">{title}</h2><button className="icon-button" onClick={onClose} aria-label="Close dialog">×</button></div>
+        <div className="modal-heading"><h2 id="modal-title">{title}</h2><button className="icon-button" onClick={onClose} aria-label={t("closeDialog")}>×</button></div>
         {children}
       </div>
     </div>
