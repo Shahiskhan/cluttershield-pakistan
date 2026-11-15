@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClutterShield quick check</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header><span class="shield" aria-hidden="true">✓</span><div><strong>ClutterShield</strong><span>Pakistan</span></div></header>
+      <p id="feed-status" class="feed-status" role="status">Checking feed status…</p>
+      <form id="check-form">
+        <label for="url-input">Suspicious link or phone number</label>
+        <input id="url-input" name="indicator" type="text" inputmode="url" placeholder="https://example.com or 03xx xxxxxxx" autocomplete="off" maxlength="4096" required />
+        <button type="submit">Check on this device</button>
+      </form>
+      <section id="result" class="result" aria-live="polite" hidden></section>
+      <button id="refresh" class="refresh" type="button">Refresh verified feed</button>
+      <button id="navigation-protection" class="refresh" type="button">Enable local navigation checks</button>
+      <p class="privacy-note">The address is checked locally. This extension does not upload your browsing history or this check.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
