@@ -1,4 +1,4 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
 import { Footer } from "./components/Footer";
 import { Navbar } from "./components/Navbar";
 import { AuthProvider } from "./context/AuthContext";
@@ -36,6 +36,7 @@ export default function App() {
 
 function AppShell() {
   const { language, direction } = useLanguage();
+  const location = useLocation();
   return (
     <div className="app-frame" lang={language} dir={direction}><Navbar /><Routes>
           <Route path="/" element={<HomePage />} />
@@ -48,6 +49,6 @@ function AppShell() {
           <Route path="/admin" element={<RoleGate roles={["platform_admin"]}><AdminLayout><AdminPortal /></AdminLayout></RoleGate>} />
           <Route path="/hacker" element={<RoleGate roles={["analyst", "mentor", "senior_reviewer"]}><HackerLayout><HackerWorkspace /></HackerLayout></RoleGate>} />
           <Route path="*" element={<NotFound />} />
-        </Routes><Footer /></div>
+        </Routes>{location.pathname === "/" && <Footer />}</div>
   );
 }
