@@ -46,6 +46,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dashboard-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 44px; padding-top: 44px; padding-bottom: 72px; }
 .dashboard-sidebar { display: flex; flex-direction: column; align-items: stretch; gap: 8px; border-right: 1px solid #d7e2e8; padding: 16px 20px 16px 0; }
 .dashboard-sidebar a { padding: 10px 12px; border-radius: 8px; text-decoration: none; color: #344e63; }
+.dashboard-main [id$="-title"], .dashboard-main #team-chat, .dashboard-main #admin-overview { scroll-margin-top: 100px; }
 .dashboard-sidebar a:hover { background: #e5f0f0; color: #0f766e; }
 .dashboard-main { min-width: 0; }
 .page-heading { margin-bottom: 28px; }

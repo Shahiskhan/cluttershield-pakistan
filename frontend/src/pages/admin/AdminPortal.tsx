@@ -7,7 +7,7 @@ export function AdminPortal() {
   const { t } = useLanguage();
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-6 text-white shadow-xl sm:p-9">
+      <section id="admin-overview" className="scroll-mt-28 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-6 text-white shadow-xl sm:p-9">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="max-w-2xl">
             <p className="mb-2 text-xs font-bold uppercase tracking-[.2em] text-teal-300">FraudAlert Pakistan · {t("platformAdministrator")}</p>
